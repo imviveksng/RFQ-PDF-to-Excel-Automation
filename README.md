@@ -137,8 +137,6 @@ The workbook columns are controlled in [mappings.py](mappings.py). The primary f
 
 ## Screenshots
 
-Add screenshots to this section to help new users verify the workflow. Recommended images:
-
 1. **Input folder** - PDFs placed in `New PDFs` before processing.
 2. **Terminal output** - a successful `python main.py` run.
 3. **Excel result** - the new row in `Enquiry Master.xlsx`.
@@ -146,8 +144,17 @@ Add screenshots to this section to help new users verify the workflow. Recommend
 
 Once image files are added to the repository (for example, under `docs/screenshots/`), reference them here:
 
-```markdown
-![Excel output](docs/screenshots/excel-output.png)
+```1. **Input folder** - PDFs placed in `New PDFs` before processing.
+![Input folder](screenshots/Input%20folder.PNG)
+
+2. **Terminal output** - a successful `python main.py` run.
+![Terminal output](screenshots/Terminal%20output.PNG)
+
+3. **Excel result** - the new row in `Enquiry Master.xlsx`.
+![Excel result](screenshots/output_excel.png)
+
+4. **Processed folder** - the renamed PDF after completion.
+![Processed folder](screenshots/Processed%20folder.PNG)
 ```
 
 ## Configuration Notes
