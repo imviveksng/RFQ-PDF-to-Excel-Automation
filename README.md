@@ -1,110 +1,204 @@
-# Quote PDF Automation
+# 📄 Quote PDF Automation — Gmail → Excel Enquiry Pipeline
 
-A Python utility that downloads new EES quotation PDFs from Gmail, extracts key project details, and appends them to an Excel enquiry master. After a PDF is processed successfully, it is renamed with its RFQ number and moved to the processed folder.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Gmail API](https://img.shields.io/badge/Gmail%20API-EA4335?style=for-the-badge&logo=gmail&logoColor=white)
+![Excel](https://img.shields.io/badge/Excel-217346?style=for-the-badge&logo=microsoft-excel&logoColor=white)
+![pdfplumber](https://img.shields.io/badge/pdfplumber-PDF%20Extraction-CC2927?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)
+![OAuth2](https://img.shields.io/badge/OAuth%202.0-Read--Only-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)
 
-## Features
+> A Python automation tool that pulls new EES quotation PDFs straight from Gmail, extracts key enquiry details, and logs them into a shared Excel enquiry master — with zero manual data entry.
 
-- Connects to Gmail with the Google Gmail API using read-only OAuth access.
-- Downloads PDF attachments whose filenames contain `ees` from messages in the configured Gmail label.
-- Extracts enquiry details such as RFQ number, customer, location, consultant, dates, sales engineer, designer, reviewer, revision, complexity, and design weight.
-- Cleans text and normalizes supported dates before saving the data.
-- Adds each processed PDF as a new row in the configured Excel worksheet.
-- Organizes completed source files by renaming and moving them to `Processed PDFs`.
-- Processes every `.pdf` file in `New PDFs`, including files downloaded from Gmail and files added manually.
+---
 
-## Requirements
+## 📌 Table of Contents
 
-- Python 3.10 or later
-- Microsoft Excel workbook at the configured output location
-- PDF files with selectable text (image-only/scanned PDFs require OCR before they can be extracted reliably)
-- A Google Cloud OAuth desktop-client credential with the Gmail API enabled
+- [Project Overview](#-project-overview)
+- [Business Problem](#-business-problem)
+- [Technology Stack](#-technology-stack)
+- [Architecture](#-architecture)
+- [Repository Structure](#-repository-structure)
+- [Features](#-features)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Excel Mapping](#-excel-mapping)
+- [Configuration Notes](#-configuration-notes)
+- [Troubleshooting](#-troubleshooting)
+- [Screenshots](#-screenshots)
+- [Future Enhancements](#-future-enhancements)
 
-Core PDF and Excel packages are pinned in [requirements.txt](requirements.txt):
+---
 
-- `pdfplumber` for PDF text extraction
-- `openpyxl` for updating the Excel workbook
+## 📖 Project Overview
 
-Gmail also requires `google-auth`, `google-auth-oauthlib`, and `google-api-python-client` for authentication and downloads.
+This project automates a task that would otherwise mean manually opening every quotation email, reading the PDF, and typing the details into an Excel tracker. Instead, it:
 
-## Folder Structure
+- Connects to Gmail (read-only) and pulls new EES quotation attachments
+- Extracts structured fields (RFQ number, customer, dates, engineers, revision, etc.) from each PDF
+- Appends a clean row to the enquiry master workbook
+- Renames the source PDF to its RFQ number and archives it
 
-The application is configured to use the following layout:
+The result is a self-running enquiry log that stays in sync with incoming quotation emails, with no copy-paste required.
 
-```text
-Quotes PDFs/
-+-- Excel/
-|   `-- Enquiry Master.xlsx
-+-- New PDFs/                    # Place unprocessed quote PDFs here
-+-- Processed PDFs/              # Processed PDFs are moved here
-`-- Python Automation/
-    +-- main.py                  # Application entry point
-    +-- config.py                # Folder, workbook, and worksheet settings
-    +-- pdf_reader.py            # PDF extraction rules
-    +-- cleaner.py               # Text and date cleanup helpers
-    +-- excel_writer.py          # Excel row writer
-    +-- gmail_auth.py            # Gmail OAuth authentication and token refresh
-    +-- gmail_downloader.py      # Downloads matching PDF attachments from Gmail
-    +-- mappings.py              # Data-field to Excel-column mapping
-    +-- utils.py                 # Shared extraction and file-move helpers
-    +-- requirements.txt
-    `-- README.md
+---
+
+## 🎯 Business Problem
+
+Quotation tracking teams typically deal with:
+
+- ❌ Manual, repetitive data entry from PDF quotations into Excel
+- ❌ Inconsistent formatting and typos from human transcription
+- ❌ Lost time hunting through inboxes for the latest RFQ PDFs
+- ❌ No consistent naming/archiving convention for processed quotes
+
+This tool solves that by turning "check inbox → open PDF → type into Excel → file the PDF" into a single command.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer            | Technology                          | Purpose                              |
+|------------------|--------------------------------------|---------------------------------------|
+| Email Source     | Gmail API (OAuth 2.0, read-only)     | Fetch quotation emails & attachments   |
+| PDF Extraction   | `pdfplumber`                          | Pull text from quotation PDFs          |
+| Data Cleaning    | Custom cleaner module                | Normalize text & dates                 |
+| Data Storage     | Excel (`openpyxl`)                    | Central enquiry master workbook        |
+| File Management  | Python `os`/`shutil` helpers          | Rename & move processed PDFs           |
+| Auth             | `google-auth`, `google-auth-oauthlib` | Gmail authentication & token refresh    |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────┐
+│           Gmail Inbox        │
+│   Label: Quotation Emails    │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│      gmail_downloader.py      │
+│  Filters *ees* PDF attachments│
+│      → saves to New PDFs      │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│         pdf_reader.py         │
+│   Extracts RFQ, dates, names, │
+│   consultant, revision, etc.  │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│          cleaner.py           │
+│  Normalizes text & date fields│
+└───────────────┬───────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│       excel_writer.py         │
+│  Appends row → Enquiry Master │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│         utils.py              │
+│  Renames PDF to RFQ number →  │
+│      moves to Processed PDFs  │
+└────────────────────────────────┘
 ```
 
-## Installation
+---
 
-1. Clone or download this project into the `Quotes PDFs/Python Automation` folder.
+## 📁 Repository Structure
 
-2. Create and activate a virtual environment:
+```
+Quotes PDFs/
+├── Excel/
+│   └── Enquiry Master.xlsx
+├── New PDFs/                    # Drop unprocessed quote PDFs here
+├── Processed PDFs/              # Processed PDFs land here, renamed
+└── Python Automation/
+    ├── main.py                  # Entry point
+    ├── config.py                # Folder, workbook, worksheet settings
+    ├── pdf_reader.py             # PDF extraction rules
+    ├── cleaner.py                # Text & date cleanup
+    ├── excel_writer.py           # Excel row writer
+    ├── gmail_auth.py             # OAuth authentication & token refresh
+    ├── gmail_downloader.py       # Gmail attachment downloader
+    ├── mappings.py               # Field → Excel column mapping
+    ├── utils.py                  # Shared extraction/file-move helpers
+    ├── requirements.txt
+    └── README.md
+```
 
-   ```powershell
-   python -m venv venv
-   .\venv\Scripts\Activate.ps1
-   ```
+---
 
-3. Install the dependencies:
+## ✅ Features
 
-   ```powershell
-   pip install -r requirements.txt
-   pip install google-auth google-auth-oauthlib google-api-python-client
-   ```
+- 📥 Connects to Gmail via read-only OAuth — never marks messages read or modifies labels
+- 🔍 Downloads only PDF attachments with `ees` in the filename (case-insensitive)
+- 🧠 Extracts RFQ number, customer, location, consultant, dates, sales engineer, designer, reviewer, revision, complexity, and design weight
+- 🧹 Cleans and normalizes text and dates before writing to Excel
+- 📊 Appends each processed quote as a new row in the enquiry master
+- 🗂️ Renames and archives every completed PDF into `Processed PDFs`
+- 🔁 Also processes manually-added PDFs dropped into `New PDFs`
 
-4. Create the folders shown above if they do not already exist.
+---
 
-5. Place `Enquiry Master.xlsx` in the `Excel` folder. Ensure it contains the worksheet specified by `SHEET_NAME` in [config.py](config.py).
+## 🚀 Installation
 
-6. Review [config.py](config.py) and update `ROOT_FOLDER`, `EXCEL_FILE`, or `SHEET_NAME` if your folders or workbook use different names.
+### Prerequisites
+- Python 3.10+
+- Microsoft Excel workbook at the configured path
+- Text-based PDFs (scanned/image-only PDFs need OCR first)
+- A Google Cloud OAuth Desktop-app credential with the Gmail API enabled
 
+### Steps
+
+```powershell
+# 1. Clone into the Quotes PDFs/Python Automation folder
+git clone https://github.com/YOUR-GITHUB-USERNAME/quote-pdf-automation.git
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 3. Install dependencies
+pip install -r requirements.txt
+pip install google-auth google-auth-oauthlib google-api-python-client
+```
+
+Then:
+4. Create the folder structure shown above if it doesn't already exist.
+5. Place `Enquiry Master.xlsx` inside `Excel/`, containing the worksheet named in `SHEET_NAME` (`config.py`).
+6. Review `config.py` and update `ROOT_FOLDER`, `EXCEL_FILE`, or `SHEET_NAME` as needed.
 7. Configure Gmail access:
+   - Enable the Gmail API and create an OAuth 2.0 **Desktop app** client in Google Cloud.
+   - Save the downloaded credential as `credentials.json` in `Python Automation`.
+   - Set `LABEL_ID` in `gmail_downloader.py` to your quotation label.
+   - On first run, complete the browser consent prompt — a `token.json` will be saved for future runs.
 
-   1. In Google Cloud, enable the Gmail API and create an OAuth 2.0 **Desktop app** client.
-   2. Download the client credential JSON and save it as `credentials.json` in the `Python Automation` folder.
-   3. Set `LABEL_ID` in [gmail_downloader.py](gmail_downloader.py) to the Gmail label that contains quotation emails.
-   4. On the first run, complete the browser sign-in and consent prompt. The application saves the resulting access and refresh token as `token.json` for future runs.
+> 🔒 `credentials.json` and `token.json` grant access to your Gmail account — keep them private and never commit them.
 
-   `credentials.json` and `token.json` grant access to the configured Gmail account. Keep them private and do not commit or share them.
+---
 
-## Usage
+## ▶️ Usage
 
-1. Add quotation emails to the configured Gmail label. You can also copy PDFs into `New PDFs` for manual processing.
+```powershell
+python main.py
+```
 
-2. Run the application from the `Python Automation` folder:
+The application will:
+1. Authenticate with Gmail and fetch messages from the configured label
+2. Download matching PDF attachments into `New PDFs`
+3. Extract and clean the configured fields from every PDF found
+4. Append the values to the next available row in Excel
+5. Rename the source PDF to `<RFQ_NUMBER>.pdf`
+6. Move it into `Processed PDFs`
 
-   ```powershell
-   python main.py
-   ```
-
-3. The application will:
-
-   1. Authenticate with Gmail and retrieve messages in the configured label.
-   2. Download attachments only when the filename is a PDF and contains `ees` (case-insensitive), saving them to `New PDFs`.
-   3. Extract and clean the configured fields from every PDF in `New PDFs`.
-   4. Append the values to the next available row of the Excel worksheet.
-   5. Rename the source PDF to `<RFQ_NUMBER>.pdf`.
-   6. Move it to `Processed PDFs`.
-
-4. Open `Excel/Enquiry Master.xlsx` to review the newly added rows.
-
-Example console output:
+**Example console output:**
 
 ```text
 Downloading New EES PDFs from Gmail...
@@ -119,12 +213,16 @@ Excel Path: E:\Quotes PDFs\Excel\Enquiry Master.xlsx
 Automation Completed Successfully.
 ```
 
-## Excel Mapping
+Open `Excel/Enquiry Master.xlsx` afterward to review the newly added rows.
 
-The workbook columns are controlled in [mappings.py](mappings.py). The primary fields include:
+---
+
+## 📊 Excel Mapping
+
+Controlled in [`mappings.py`](mappings.py):
 
 | Excel column | Field |
-| --- | --- |
+|---|---|
 | A | Month |
 | B | Inquiry / RFQ number |
 | C | ABR sales engineer |
@@ -132,51 +230,68 @@ The workbook columns are controlled in [mappings.py](mappings.py). The primary f
 | F | Building |
 | G | Consultant |
 | H | Location |
-| K-N | Key dates, designer, and checker |
-| O-V | Weight, revision, complexity, status, and remarks |
+| K–N | Key dates, designer, checker |
+| O–V | Weight, revision, complexity, status, remarks |
 
-## Screenshots
+---
 
-1. **Input folder** - PDFs placed in `New PDFs` before processing.
-2. **Terminal output** - a successful `python main.py` run.
-3. **Excel result** - the new row in `Enquiry Master.xlsx`.
-4. **Processed folder** - the renamed PDF after completion.
+## ⚙️ Configuration Notes
 
-```1. **Input folder** - PDFs placed in `New PDFs` before processing.
-![Input folder](screenshots/Input%20folder.PNG)
+- Gmail settings (`LABEL_ID`, `DOWNLOAD_FOLDER`) live in `gmail_downloader.py`.
+- Gmail access is strictly **read-only** — no messages are marked read or relabeled.
+- The downloader re-fetches all messages currently in the label and doesn't track history, so archive/remove processed emails from the label to avoid duplicate rows.
+- Extraction patterns live in `pdf_reader.py` — adjust these when a PDF template changes.
+- `ABR_SALES` extraction uses a pattern following `SALES ENGG.` (line-based, e.g. `r"SALES ENGG\.\s*([^\r\n]+)"`).
+- New rows are appended at `sheet.max_row + 1` — keep the workbook unprotected and closed while running.
+- Each processed PDF is renamed using its extracted RFQ number — verify PDFs contain a valid RFQ number before running.
 
-2. **Terminal output** - a successful `python main.py` run.
-![Terminal output](screenshots/Terminal%20output.PNG)
+---
 
-3. **Excel result** - the new row in `Enquiry Master.xlsx`.
-![Excel result](screenshots/output_excel.png)
-
-4. **Processed folder** - the renamed PDF after completion.
-![Processed folder](screenshots/Processed%20folder.PNG)
-```
-
-## Configuration Notes
-
-- Gmail settings are in [gmail_downloader.py](gmail_downloader.py). `LABEL_ID` identifies the source label, and `DOWNLOAD_FOLDER` is the folder used for downloaded attachments.
-- Gmail access is read-only. The application does not mark messages as read, remove labels, or otherwise change email messages.
-- The downloader currently retrieves attachments from all messages returned for the configured label. It does not track previously downloaded emails, so keep the label limited to new quotation emails or remove/archive messages from the label after successful processing to avoid duplicates on later runs.
-- Extraction patterns live in [pdf_reader.py](pdf_reader.py). Adjust them when a PDF template uses different labels or formatting.
-- `ABR_SALES` is extracted from the text following `SALES ENGG.`. For multi-line PDF layouts, use a line-based pattern such as `r"SALES ENGG\.\s*([^\r\n]+)"`.
-- The script appends to `sheet.max_row + 1`; keep the target worksheet available and avoid protected workbooks.
-- Processed PDFs are renamed using the extracted RFQ number. Verify that each source PDF contains a valid RFQ number before running the script.
-
-## Troubleshooting
+## 🩺 Troubleshooting
 
 | Issue | Suggested check |
-| --- | --- |
-| `No new PDFs found.` | Add matching Gmail attachments to the configured label or add PDF files directly to `New PDFs`. |
-| Gmail sign-in opens on every run | Delete an invalid `token.json`, then run the script and complete the OAuth prompt again. |
-| Gmail authentication fails | Confirm the Gmail API is enabled, `credentials.json` is a Desktop app credential, and the signed-in account has access to the configured label. |
-| No Gmail attachments are downloaded | Confirm the email is in the configured label and the attachment filename is a PDF containing `ees`. |
-| Workbook or worksheet error | Confirm the Excel file path and sheet name in `config.py`. |
-| A field is blank in Excel | Inspect the extracted PDF text and update the matching pattern in `pdf_reader.py`. |
-| PDF cannot be read | Confirm it is a valid, text-based PDF; scanned PDFs may require OCR. |
+|---|---|
+| `No new PDFs found.` | Add matching Gmail attachments to the label, or drop PDFs directly into `New PDFs`. |
+| Gmail sign-in opens every run | Delete an invalid `token.json` and re-run to complete OAuth again. |
+| Gmail authentication fails | Confirm the Gmail API is enabled, `credentials.json` is a Desktop app credential, and the account can access the configured label. |
+| No attachments downloaded | Confirm the email is labeled correctly and the filename is a PDF containing `ees`. |
+| Workbook/worksheet error | Confirm the Excel path and sheet name in `config.py`. |
+| Blank field in Excel | Inspect the extracted PDF text and adjust the pattern in `pdf_reader.py`. |
+| PDF can't be read | Confirm it's a valid, text-based PDF — scanned PDFs may need OCR first. |
 
-## License
+---
 
-This project is intended for internal use. Add a license file if it will be shared externally.
+## 🖼️ Screenshots
+
+1. **Input folder** — PDFs placed in `New PDFs` before processing
+   `screenshots/Input Folder.PNG`
+2. **Terminal output** — a successful `python main.py` run
+   `screenshots/Terminal Output.PNG`
+3. **Excel result** — the new row in `Enquiry Master.xlsx`
+   `screenshots/output_excel.png`
+4. **Processed folder** — the renamed PDF after completion
+   `screenshots/Processed Folder.PNG`
+
+---
+
+## 🔮 Future Enhancements
+
+- [ ] Track already-downloaded emails to avoid re-processing on repeated label runs
+- [ ] OCR fallback for scanned/image-only PDFs
+- [ ] Logging/audit trail of every run (success/failure per PDF)
+- [ ] Config-driven extraction templates for multiple quotation formats
+- [ ] Optional database backend alongside Excel for larger volumes
+
+---
+
+## 📬 Connect
+
+Feel free to connect or reach out if you have questions about this project!
+
+<!-- Replace these with your actual profiles -->
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/YOUR-LINKEDIN-HANDLE)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/YOUR-GITHUB-USERNAME)
+
+---
+
+*Built as a workflow automation project — turning manual quote logging into a one-command pipeline.*
