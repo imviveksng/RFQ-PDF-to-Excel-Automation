@@ -142,8 +142,6 @@ The workbook columns are controlled in [mappings.py](mappings.py). The primary f
 3. **Excel result** - the new row in `Enquiry Master.xlsx`.
 4. **Processed folder** - the renamed PDF after completion.
 
-Once image files are added to the repository (for example, under `docs/screenshots/`), reference them here:
-
 ```1. **Input folder** - PDFs placed in `New PDFs` before processing.
 ![Input folder](screenshots/Input%20folder.PNG)
 
